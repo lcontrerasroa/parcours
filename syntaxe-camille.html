@@ -134,6 +134,7 @@
     border-radius: 0 6px 6px 0;
     transition: background 0.15s;
     user-select: none;
+    white-space: nowrap;
   }
 
   .node-header:hover { background: var(--surface2) !important; }
@@ -166,6 +167,7 @@
     font-size: 0.88rem;
     color: var(--text);
     line-height: 1.5;
+    white-space: nowrap;
   }
 
   .node-function {
@@ -195,6 +197,7 @@
     padding: 0.2rem 0.6rem 0.2rem 1.8rem;
     color: var(--text-dim);
     font-style: italic;
+    white-space: nowrap;
   }
 
   /* ── Tag colors ── */
@@ -223,6 +226,58 @@
   .node.c-gpart     { border-left-color: var(--gpart); }
   .node.c-coord     { border-left-color: var(--coord); }
   .node.c-gadj      { border-left-color: var(--gadj); }
+
+  /* ── Scrollable tree wrapper ── */
+  .tree-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    padding: 0 1rem 1rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .tree-scroll::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .tree-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .tree-scroll::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+
+  .tree-inner {
+    min-width: max-content;
+  }
+
+  .scroll-hint {
+    display: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 0.4rem;
+    margin-bottom: 0.5rem;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+    border-radius: 5px;
+  }
+
+  @media (max-width: 768px) {
+    .scroll-hint { display: block; }
+    body { padding: 1rem 0.5rem; }
+    .source-text { font-size: 0.85rem; padding: 1rem; }
+    .node-text { font-size: 0.82rem; }
+    .node-header { gap: 0.4rem; padding: 0.3rem 0.5rem; }
+    .node-children { padding-left: 1rem; }
+    .leaf { padding-left: 1.4rem; font-size: 0.8rem; }
+    .tag { font-size: 0.62rem; padding: 0.12rem 0.4rem; }
+    .node-function { font-size: 0.6rem; }
+  }
 
   .controls {
     display: flex;
@@ -288,7 +343,8 @@
 
 <header>
   <h1>Décorticage syntaxique pour Camille</h1>
-  <p>Ce charabia juridique semble être infini, sans queue ni tête. J'ai essayé de l'organiser syntaxiquement (semi-automatiquement à l'aide de python). J'espère que ça t'aidera à mieux le comprendre ou, au moins, à l'apprécier sous une autre lumière. (DIS MOI SI TU VEUX QUE JE LE SUPPRIME !)</p>
+  <p>
+Ce charabia juridique semble être infini, sans queue ni tête. J'ai essayé de l'organiser syntaxiquement (semi-automatiquement à l'aide de python). J'espère que ça t'aidera à mieux le comprendre ou, au moins, à l'apprécier sous une autre lumière. (DIS MOI SI TU VEUX QUE JE LE SUPPRIME !)</p>
 </header>
 
 <div class="legend">
@@ -321,7 +377,8 @@
   <button onclick="expandLevelIn('tree1',3)">Niv. 3</button>
 </div>
 
-<div id="tree1"></div>
+<div class="scroll-hint">← glisser horizontalement pour voir les niveaux profonds →</div>
+<div class="tree-scroll"><div class="tree-inner" id="tree1"></div></div>
 
 <div class="divider"></div>
 
@@ -341,7 +398,8 @@
   <button onclick="expandLevelIn('tree2',3)">Niv. 3</button>
 </div>
 
-<div id="tree2"></div>
+<div class="scroll-hint">← glisser horizontalement pour voir les niveaux profonds →</div>
+<div class="tree-scroll"><div class="tree-inner" id="tree2"></div></div>
 
 <div class="note">
   <strong>Notes d'analyse :</strong><br><br>
