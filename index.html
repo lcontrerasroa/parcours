@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analyse syntaxique arborescente — Complète</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232733;
+    --border: #2e3347;
+    --text: #e2e4ed;
+    --text-dim: #8b90a5;
+    --phrase: #ff6b6b;
+    --prop-sub: #ffd93d;
+    --prop-comp: #6bcb77;
+    --prop-conc: #ff922b;
+    --gn: #4d96ff;
+    --gp: #9b72cf;
+    --gv: #ff922b;
+    --gadv: #20c997;
+    --ginf: #e599f7;
+    --gpart: #66d9e8;
+    --coord: #ff8787;
+    --gadj: #f783ac;
+    --accent: #7c83ff;
+    --accent2: #ff922b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Source Serif 4', Georgia, serif;
+    line-height: 1.7;
+    padding: 2rem 1rem;
+    min-height: 100vh;
+  }
+
+  .container { max-width: 960px; margin: 0 auto; }
+
+  header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    font-style: italic;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    justify-content: center;
+    margin-bottom: 2.5rem;
+    padding: 1rem;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .source-text {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2.5rem;
+    font-size: 0.92rem;
+    color: var(--text-dim);
+    font-style: italic;
+    line-height: 1.8;
+  }
+
+  .source-text strong {
+    color: var(--text);
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  .source-text .highlight-new {
+    color: var(--accent2);
+    font-style: italic;
+    border-bottom: 1px dashed var(--accent2);
+  }
+
+  /* ── Tree nodes ── */
+  .node {
+    border-left: 3px solid var(--border);
+    margin: 0.4rem 0 0.4rem 0.2rem;
+    padding-left: 0;
+    transition: border-color 0.2s;
+  }
+
+  .node-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    cursor: pointer;
+    padding: 0.35rem 0.6rem;
+    border-radius: 0 6px 6px 0;
+    transition: background 0.15s;
+    user-select: none;
+  }
+
+  .node-header:hover { background: var(--surface2) !important; }
+
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+
+  .arrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+    width: 1em;
+    text-align: center;
+  }
+
+  .arrow.open { transform: rotate(90deg); }
+
+  .node-text {
+    font-size: 0.88rem;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .node-function {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    background: var(--surface);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .node-children {
+    padding-left: 1.2rem;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+
+  .node-children.collapsed {
+    max-height: 0 !important;
+    overflow: hidden;
+  }
+
+  .leaf {
+    font-size: 0.85rem;
+    padding: 0.2rem 0.6rem 0.2rem 1.8rem;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  /* ── Tag colors ── */
+  .tag-phrase    { background: color-mix(in srgb, var(--phrase) 20%, transparent); color: var(--phrase); border: 1px solid color-mix(in srgb, var(--phrase) 35%, transparent); }
+  .tag-prop-sub  { background: color-mix(in srgb, var(--prop-sub) 18%, transparent); color: var(--prop-sub); border: 1px solid color-mix(in srgb, var(--prop-sub) 30%, transparent); }
+  .tag-prop-comp { background: color-mix(in srgb, var(--prop-comp) 18%, transparent); color: var(--prop-comp); border: 1px solid color-mix(in srgb, var(--prop-comp) 30%, transparent); }
+  .tag-prop-conc { background: color-mix(in srgb, var(--prop-conc) 18%, transparent); color: var(--prop-conc); border: 1px solid color-mix(in srgb, var(--prop-conc) 30%, transparent); }
+  .tag-gn        { background: color-mix(in srgb, var(--gn) 18%, transparent); color: var(--gn); border: 1px solid color-mix(in srgb, var(--gn) 30%, transparent); }
+  .tag-gp        { background: color-mix(in srgb, var(--gp) 18%, transparent); color: var(--gp); border: 1px solid color-mix(in srgb, var(--gp) 30%, transparent); }
+  .tag-gv        { background: color-mix(in srgb, var(--gv) 18%, transparent); color: var(--gv); border: 1px solid color-mix(in srgb, var(--gv) 30%, transparent); }
+  .tag-gadv      { background: color-mix(in srgb, var(--gadv) 18%, transparent); color: var(--gadv); border: 1px solid color-mix(in srgb, var(--gadv) 30%, transparent); }
+  .tag-ginf      { background: color-mix(in srgb, var(--ginf) 18%, transparent); color: var(--ginf); border: 1px solid color-mix(in srgb, var(--ginf) 30%, transparent); }
+  .tag-gpart     { background: color-mix(in srgb, var(--gpart) 18%, transparent); color: var(--gpart); border: 1px solid color-mix(in srgb, var(--gpart) 30%, transparent); }
+  .tag-coord     { background: color-mix(in srgb, var(--coord) 18%, transparent); color: var(--coord); border: 1px solid color-mix(in srgb, var(--coord) 30%, transparent); }
+  .tag-gadj      { background: color-mix(in srgb, var(--gadj) 18%, transparent); color: var(--gadj); border: 1px solid color-mix(in srgb, var(--gadj) 30%, transparent); }
+
+  .node.c-phrase    { border-left-color: var(--phrase); }
+  .node.c-prop-sub  { border-left-color: var(--prop-sub); }
+  .node.c-prop-comp { border-left-color: var(--prop-comp); }
+  .node.c-prop-conc { border-left-color: var(--prop-conc); }
+  .node.c-gn        { border-left-color: var(--gn); }
+  .node.c-gp        { border-left-color: var(--gp); }
+  .node.c-gv        { border-left-color: var(--gv); }
+  .node.c-gadv      { border-left-color: var(--gadv); }
+  .node.c-ginf      { border-left-color: var(--ginf); }
+  .node.c-gpart     { border-left-color: var(--gpart); }
+  .node.c-coord     { border-left-color: var(--coord); }
+  .node.c-gadj      { border-left-color: var(--gadj); }
+
+  .controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .controls button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.4rem 0.9rem;
+    background: var(--surface);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .controls button:hover {
+    background: var(--surface2);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    margin: 2.5rem 0 0.8rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .section-label.part2 { color: var(--accent2); border-bottom-color: color-mix(in srgb, var(--accent2) 40%, transparent); }
+
+  .note {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-top: 2rem;
+    padding: 1rem;
+    background: var(--surface);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    line-height: 1.6;
+  }
+
+  .note strong { color: var(--text); }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 2.5rem 0;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>Décorticage syntaxique pour Camille</h1>
+  <p>Ce charabia juridique semble être infini, sans queue ni tête. J'ai essayé de l'organiser syntaxiquement (semi-automatiquement à l'aide de python). J'espère que ça t'aidera à mieux le comprendre ou, au moins, à l'apprécier sous une autre lumière. (DIS MOI SI TU VEUX QUE JE LE SUPPRIME !)</p>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--phrase)"></div>Phrase</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--prop-sub)"></div>Prop. sub. conj.</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--prop-conc)"></div>Prop. concessive</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--gv)"></div>GV</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--gn)"></div>GN</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--gp)"></div>GP</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--gadv)"></div>GAdv / GAdj</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--ginf)"></div>GInf</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--gpart)"></div>GPart</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--coord)"></div>Coord.</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--gadj)"></div>GAdj</div>
+</div>
+
+<!-- ════════════════ FRAGMENT 1 ════════════════ -->
+
+<div class="source-text">
+  <strong>Fragment 1 :</strong> « là encore sur le plan de la légalité et pas du médical en soulignant que les informations à disposition de l'administration étaient suffisantes en soi pour créer un doute sérieux quant à la régularité de la procédure d'examen du dossier par le CM93 et que son pouvoir décisionnaire n'implique pas d'opposer une évaluation de la situation médicale, mais d'assurer la régularité de la procédure faisant intervenir l'expertise et l'avis des conseils médicaux afin de lui permettre de se prononcer sur la demande, sans être en compétence liée. »
+</div>
+
+<div class="section-label">Fragment 1 — Structure principale</div>
+
+<div class="controls">
+  <button onclick="expandAllIn('tree1')">▸ Tout déplier</button>
+  <button onclick="collapseAllIn('tree1')">▾ Tout replier</button>
+  <button onclick="expandLevelIn('tree1',1)">Niv. 1</button>
+  <button onclick="expandLevelIn('tree1',2)">Niv. 2</button>
+  <button onclick="expandLevelIn('tree1',3)">Niv. 3</button>
+</div>
+
+<div id="tree1"></div>
+
+<div class="divider"></div>
+
+<!-- ════════════════ FRAGMENT 2 ════════════════ -->
+
+<div class="source-text">
+  <strong>Fragment 2 :</strong> « Et quand bien même les irrégularités <span class="highlight-new">n'étaient pas de nature à directement l'alerter elle-même quant à l'illégalité de l'instruction sur la partie du dossier relevant des compétences des conseils médicaux, les sollicitations du requérant demandant clarification de la procédure à différents moments de son instruction auraient dû, eux en revanche, être de nature à créer un doute suffisant et, en tout état de cause dans la situation présente, même sérieux afin de se saisir a minima d'évaluer que le doute émis par le requérant n'impliquait aucune véracité quant à une procédure viciée.</span> »
+</div>
+
+<div class="section-label part2">Fragment 2 — Phrase concessive complète</div>
+
+<div class="controls">
+  <button onclick="expandAllIn('tree2')">▸ Tout déplier</button>
+  <button onclick="collapseAllIn('tree2')">▾ Tout replier</button>
+  <button onclick="expandLevelIn('tree2',1)">Niv. 1</button>
+  <button onclick="expandLevelIn('tree2',2)">Niv. 2</button>
+  <button onclick="expandLevelIn('tree2',3)">Niv. 3</button>
+</div>
+
+<div id="tree2"></div>
+
+<div class="note">
+  <strong>Notes d'analyse :</strong><br><br>
+  <strong>1.</strong> Le fragment 2 complète la concessive amorcée en fin de fragment 1 (« Et quand bien même les irrégularités… »). La structure globale est : <em>quand bien même</em> P<sub>concessive</sub>, P<sub>principale</sub>.<br><br>
+  <strong>2.</strong> Dans la principale, le sujet « les sollicitations du requérant… » est repris par le pronom disjoint « eux » (apposition de reprise), renforcé par « en revanche » (valeur adversative par rapport à la concessive).<br><br>
+  <strong>3.</strong> L'attribut « de nature à créer un doute suffisant et, <em>en tout état de cause dans la situation présente</em>, même sérieux » présente une coordination d'adjectifs (<em>suffisant</em> et <em>sérieux</em>) séparée par une longue incise, avec « même » comme adverbe renchérissant.<br><br>
+  <strong>4.</strong> La finale « afin de se saisir a minima d'évaluer que… » enchaîne trois niveaux d'infinitives emboîtées, culminant dans une complétive.
+</div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  TREE DATA — FRAGMENT 1
+// ══════════════════════════════════════════
+const tree1 = {
+  tag: "Phrase", cls: "phrase", fn: "Fragment principal",
+  text: "là encore sur le plan de la légalité … sans être en compétence liée.",
+  children: [
+    {
+      tag: "GAdv", cls: "gadv", fn: "Cadre discursif",
+      text: "là encore",
+      children: [
+        { leaf: "là — adv. de lieu (anaphorique)" },
+        { leaf: "encore — adv. modalisateur" }
+      ]
+    },
+    {
+      tag: "GP", cls: "gp", fn: "CC de domaine",
+      text: "sur le plan de la légalité et pas du médical",
+      children: [
+        { leaf: "sur — prép." },
+        {
+          tag: "GN", cls: "gn", fn: "Régime",
+          text: "le plan de la légalité et pas du médical",
+          children: [
+            { leaf: "le plan — dét. + nom (noyau)" },
+            {
+              tag: "GP", cls: "gp", fn: "Compl. du nom",
+              text: "de la légalité",
+              children: [
+                { leaf: "de — prép." },
+                { leaf: "la légalité — dét. + nom" }
+              ]
+            },
+            {
+              tag: "Coord", cls: "coord", fn: "Coord. antithétique",
+              text: "et pas du médical",
+              children: [
+                { leaf: "et — conj. de coord." },
+                { leaf: "pas — adv. de nég." },
+                {
+                  tag: "GP", cls: "gp", fn: "2ᵉ terme",
+                  text: "du médical",
+                  children: [
+                    { leaf: "du (= de + le) — prép. + dét." },
+                    { leaf: "médical — adj. substantivé" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      tag: "GPart", cls: "gpart", fn: "CC de manière / gérondif",
+      text: "en soulignant que … compétence liée",
+      children: [
+        { leaf: "en soulignant — gérondif (prép. en + part. prés.)" },
+        {
+          tag: "Coord", cls: "coord", fn: "Coord. de 2 complétives",
+          text: "que P₁ et que P₂",
+          children: [
+            {
+              tag: "Prop. sub. conj.", cls: "prop-sub", fn: "COD₁ de « soulignant »",
+              text: "que les informations … par le CM93",
+              children: [
+                { leaf: "que — conj. de subordination" },
+                {
+                  tag: "GN", cls: "gn", fn: "Sujet",
+                  text: "les informations à disposition de l'administration",
+                  children: [
+                    { leaf: "les informations — dét. + nom (noyau)" },
+                    {
+                      tag: "GP", cls: "gp", fn: "Compl. du nom",
+                      text: "à disposition de l'administration",
+                      children: [
+                        { leaf: "à disposition — loc. prép." },
+                        { tag: "GP", cls: "gp", fn: "Compl.", text: "de l'administration", children: [
+                          { leaf: "de — prép." }, { leaf: "l'administration — dét. + nom" }
+                        ]}
+                      ]
+                    }
+                  ]
+                },
+                {
+                  tag: "GV", cls: "gv", fn: "Prédicat",
+                  text: "étaient suffisantes en soi pour créer un doute sérieux …",
+                  children: [
+                    { leaf: "étaient — v. être, imp. 3pl (copule)" },
+                    {
+                      tag: "GAdj", cls: "gadj", fn: "Attribut du sujet",
+                      text: "suffisantes en soi",
+                      children: [
+                        { leaf: "suffisantes — adj. qual. (noyau)" },
+                        { tag: "GP", cls: "gp", fn: "Compl. de l'adj.", text: "en soi", children: [
+                          { leaf: "en — prép." }, { leaf: "soi — pron. réfl. tonique" }
+                        ]}
+                      ]
+                    },
+                    {
+                      tag: "GP", cls: "gp", fn: "Compl. de conséquence",
+                      text: "pour créer un doute sérieux quant à …",
+                      children: [
+                        { leaf: "pour — prép." },
+                        {
+                          tag: "GInf", cls: "ginf", fn: "Régime infinitif",
+                          text: "créer un doute sérieux quant à …",
+                          children: [
+                            { leaf: "créer — v. inf. (noyau)" },
+                            { tag: "GN", cls: "gn", fn: "COD", text: "un doute sérieux", children: [
+                              { leaf: "un — dét." }, { leaf: "doute — nom (noyau)" }, { leaf: "sérieux — adj. épithète" }
+                            ]},
+                            {
+                              tag: "GP", cls: "gp", fn: "Compl. de « doute »",
+                              text: "quant à la régularité de la procédure d'examen du dossier par le CM93",
+                              children: [
+                                { leaf: "quant à — loc. prép." },
+                                { tag: "GN", cls: "gn", fn: "Régime", text: "la régularité de la procédure …", children: [
+                                  { leaf: "la régularité — dét. + nom (noyau)" },
+                                  { tag: "GP", cls: "gp", fn: "Compl. du nom", text: "de la procédure d'examen du dossier par le CM93", children: [
+                                    { leaf: "de — prép." },
+                                    { tag: "GN", cls: "gn", fn: "Régime", text: "la procédure d'examen du dossier par le CM93", children: [
+                                      { leaf: "la procédure — dét. + nom (noyau)" },
+                                      { tag: "GP", cls: "gp", fn: "Compl. du nom", text: "d'examen du dossier", children: [
+                                        { leaf: "d' — prép." }, { leaf: "examen — nom" },
+                                        { tag: "GP", cls: "gp", fn: "Compl.", text: "du dossier", children: [
+                                          { leaf: "du — prép. + dét." }, { leaf: "dossier — nom" }
+                                        ]}
+                                      ]},
+                                      { tag: "GP", cls: "gp", fn: "Compl. d'agent", text: "par le CM93", children: [
+                                        { leaf: "par — prép." }, { leaf: "le CM93 — dét. + nom propre" }
+                                      ]}
+                                    ]}
+                                  ]}
+                                ]}
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            { leaf: "et — conj. de coordination" },
+            {
+              tag: "Prop. sub. conj.", cls: "prop-sub", fn: "COD₂ de « soulignant »",
+              text: "que son pouvoir décisionnaire n'implique pas … compétence liée",
+              children: [
+                { leaf: "que — conj. de subordination" },
+                { tag: "GN", cls: "gn", fn: "Sujet", text: "son pouvoir décisionnaire", children: [
+                  { leaf: "son — dét. possessif" }, { leaf: "pouvoir — nom (noyau)" }, { leaf: "décisionnaire — adj. épithète" }
+                ]},
+                {
+                  tag: "GV", cls: "gv", fn: "Prédicat",
+                  text: "n'implique pas d'opposer … mais d'assurer …",
+                  children: [
+                    { leaf: "n'… pas — adv. de nég. (discont.)" },
+                    { leaf: "implique — v. impliquer, ind. prés. 3sg" },
+                    {
+                      tag: "Coord", cls: "coord", fn: "Coord. adversative « pas … mais »",
+                      text: "pas d'opposer … mais d'assurer …",
+                      children: [
+                        {
+                          tag: "GInf", cls: "ginf", fn: "COD nié",
+                          text: "d'opposer une évaluation de la situation médicale",
+                          children: [
+                            { leaf: "d' — prép. intro. d'infinitif" },
+                            { leaf: "opposer — v. inf. (noyau)" },
+                            { tag: "GN", cls: "gn", fn: "COD", text: "une évaluation de la situation médicale", children: [
+                              { leaf: "une évaluation — dét. + nom (noyau)" },
+                              { tag: "GP", cls: "gp", fn: "Compl. du nom", text: "de la situation médicale", children: [
+                                { leaf: "de — prép." }, { leaf: "la situation médicale — dét. + nom + adj." }
+                              ]}
+                            ]}
+                          ]
+                        },
+                        { leaf: "mais — conj. de coord. (adversative)" },
+                        {
+                          tag: "GInf", cls: "ginf", fn: "COD réel (rectification)",
+                          text: "d'assurer la régularité … sans être en compétence liée",
+                          children: [
+                            { leaf: "d' — prép." },
+                            { leaf: "assurer — v. inf. (noyau)" },
+                            { tag: "GN", cls: "gn", fn: "COD", text: "la régularité de la procédure faisant intervenir …", children: [
+                              { leaf: "la régularité — dét. + nom (noyau)" },
+                              { tag: "GP", cls: "gp", fn: "Compl. du nom", text: "de la procédure faisant intervenir …", children: [
+                                { leaf: "de — prép." },
+                                { tag: "GN", cls: "gn", fn: "Régime", text: "la procédure faisant intervenir …", children: [
+                                  { leaf: "la procédure — dét. + nom (noyau)" },
+                                  { tag: "GPart", cls: "gpart", fn: "Épithète participiale", text: "faisant intervenir l'expertise et l'avis des conseils médicaux", children: [
+                                    { leaf: "faisant — part. prés. de « faire »" },
+                                    { tag: "GInf", cls: "ginf", fn: "COD (factitive)", text: "intervenir l'expertise et l'avis …", children: [
+                                      { leaf: "intervenir — v. inf." },
+                                      { tag: "Coord", cls: "coord", fn: "Sujet de « intervenir »", text: "l'expertise et l'avis des conseils médicaux", children: [
+                                        { leaf: "l'expertise — dét. + nom" },
+                                        { leaf: "et — conj." },
+                                        { tag: "GN", cls: "gn", fn: "2ᵉ terme", text: "l'avis des conseils médicaux", children: [
+                                          { leaf: "l'avis — dét. + nom (noyau)" },
+                                          { tag: "GP", cls: "gp", fn: "Compl.", text: "des conseils médicaux", children: [
+                                            { leaf: "des — prép. + dét." }, { leaf: "conseils médicaux — nom + adj." }
+                                          ]}
+                                        ]}
+                                      ]}
+                                    ]}
+                                  ]}
+                                ]}
+                              ]}
+                            ]},
+                            { tag: "GP", cls: "gp", fn: "CC de but", text: "afin de lui permettre de se prononcer sur la demande", children: [
+                              { leaf: "afin de — loc. prép." },
+                              { tag: "GInf", cls: "ginf", fn: "Régime", text: "lui permettre de se prononcer sur la demande", children: [
+                                { leaf: "lui — pron. COI" }, { leaf: "permettre — v. inf. (noyau)" },
+                                { tag: "GInf", cls: "ginf", fn: "COD de « permettre »", text: "de se prononcer sur la demande", children: [
+                                  { leaf: "de — prép." }, { leaf: "se prononcer — v. pron. inf." },
+                                  { tag: "GP", cls: "gp", fn: "COI", text: "sur la demande", children: [
+                                    { leaf: "sur — prép." }, { leaf: "la demande — dét. + nom" }
+                                  ]}
+                                ]}
+                              ]}
+                            ]},
+                            { tag: "GP", cls: "gp", fn: "CC restrictif", text: "sans être en compétence liée", children: [
+                              { leaf: "sans — prép." },
+                              { tag: "GInf", cls: "ginf", fn: "Régime", text: "être en compétence liée", children: [
+                                { leaf: "être — v. inf. (copule)" },
+                                { tag: "GP", cls: "gp", fn: "Attribut locutionnel", text: "en compétence liée", children: [
+                                  { leaf: "en — prép." }, { leaf: "compétence liée — loc. juridique" }
+                                ]}
+                              ]}
+                            ]}
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+};
+
+// ══════════════════════════════════════════
+//  TREE DATA — FRAGMENT 2
+// ══════════════════════════════════════════
+const tree2 = {
+  tag: "Phrase", cls: "phrase", fn: "Phrase complexe concessive",
+  text: "Et quand bien même les irrégularités … quant à une procédure viciée.",
+  children: [
+    { leaf: "Et — conj. de coord. (enchaînement inter-phrastique)" },
+    {
+      tag: "Prop. concessive", cls: "prop-conc", fn: "Sub. concessive (protase)",
+      text: "quand bien même les irrégularités n'étaient pas de nature à … des conseils médicaux",
+      children: [
+        { leaf: "quand bien même — loc. conj. concessive" },
+        {
+          tag: "GN", cls: "gn", fn: "Sujet",
+          text: "les irrégularités",
+          children: [
+            { leaf: "les — dét. défini" },
+            { leaf: "irrégularités — nom (noyau)" }
+          ]
+        },
+        {
+          tag: "GV", cls: "gv", fn: "Prédicat",
+          text: "n'étaient pas de nature à directement l'alerter elle-même quant à …",
+          children: [
+            { leaf: "n'… pas — adv. de nég. (discont.)" },
+            { leaf: "étaient — v. être, imp. 3pl (copule)" },
+            {
+              tag: "GP", cls: "gp", fn: "Attribut du sujet (locution)",
+              text: "de nature à directement l'alerter elle-même",
+              children: [
+                { leaf: "de nature à — loc. adj. (+ inf.)" },
+                {
+                  tag: "GInf", cls: "ginf", fn: "Complément de la loc. adj.",
+                  text: "directement l'alerter elle-même",
+                  children: [
+                    { leaf: "directement — adv. de manière" },
+                    { leaf: "l' — pron. pers. COD (= l'administration)" },
+                    { leaf: "alerter — v. inf. (noyau)" },
+                    { leaf: "elle-même — pron. tonique renforcé (apposition au COD)" }
+                  ]
+                }
+              ]
+            },
+            {
+              tag: "GP", cls: "gp", fn: "Compl. de « alerter » (objet indirect)",
+              text: "quant à l'illégalité de l'instruction sur la partie du dossier relevant des compétences des conseils médicaux",
+              children: [
+                { leaf: "quant à — loc. prép." },
+                {
+                  tag: "GN", cls: "gn", fn: "Régime",
+                  text: "l'illégalité de l'instruction sur la partie du dossier …",
+                  children: [
+                    { leaf: "l'illégalité — dét. + nom (noyau)" },
+                    {
+                      tag: "GP", cls: "gp", fn: "Compl. du nom",
+                      text: "de l'instruction",
+                      children: [
+                        { leaf: "de — prép." },
+                        { leaf: "l'instruction — dét. + nom" }
+                      ]
+                    },
+                    {
+                      tag: "GP", cls: "gp", fn: "Compl. circ. de domaine",
+                      text: "sur la partie du dossier relevant des compétences des conseils médicaux",
+                      children: [
+                        { leaf: "sur — prép." },
+                        {
+                          tag: "GN", cls: "gn", fn: "Régime",
+                          text: "la partie du dossier relevant des compétences des conseils médicaux",
+                          children: [
+                            { leaf: "la partie — dét. + nom (noyau)" },
+                            { tag: "GP", cls: "gp", fn: "Compl. du nom", text: "du dossier", children: [
+                              { leaf: "du — prép. + dét." }, { leaf: "dossier — nom" }
+                            ]},
+                            {
+                              tag: "GPart", cls: "gpart", fn: "Épithète participiale",
+                              text: "relevant des compétences des conseils médicaux",
+                              children: [
+                                { leaf: "relevant — part. prés. de « relever »" },
+                                { tag: "GP", cls: "gp", fn: "COI de « relever de »", text: "des compétences des conseils médicaux", children: [
+                                  { leaf: "des — prép. + dét." },
+                                  { tag: "GN", cls: "gn", fn: "Régime", text: "compétences des conseils médicaux", children: [
+                                    { leaf: "compétences — nom (noyau)" },
+                                    { tag: "GP", cls: "gp", fn: "Compl. du nom", text: "des conseils médicaux", children: [
+                                      { leaf: "des — prép. + dét." }, { leaf: "conseils médicaux — nom + adj." }
+                                    ]}
+                                  ]}
+                                ]}
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      tag: "Phrase", cls: "phrase", fn: "Prop. principale (apodose)",
+      text: "les sollicitations du requérant … quant à une procédure viciée.",
+      children: [
+        {
+          tag: "GN", cls: "gn", fn: "Sujet",
+          text: "les sollicitations du requérant demandant clarification de la procédure à différents moments de son instruction",
+          children: [
+            { leaf: "les sollicitations — dét. + nom (noyau)" },
+            { tag: "GP", cls: "gp", fn: "Compl. du nom", text: "du requérant", children: [
+              { leaf: "du — prép. + dét." }, { leaf: "requérant — nom (part. substantivé)" }
+            ]},
+            {
+              tag: "GPart", cls: "gpart", fn: "Épithète participiale (du GN sujet)",
+              text: "demandant clarification de la procédure à différents moments de son instruction",
+              children: [
+                { leaf: "demandant — part. prés. de « demander »" },
+                { tag: "GN", cls: "gn", fn: "COD", text: "clarification de la procédure", children: [
+                  { leaf: "clarification — nom (sans dét. = style juridique)" },
+                  { tag: "GP", cls: "gp", fn: "Compl. du nom", text: "de la procédure", children: [
+                    { leaf: "de — prép." }, { leaf: "la procédure — dét. + nom" }
+                  ]}
+                ]},
+                { tag: "GP", cls: "gp", fn: "CC de temps", text: "à différents moments de son instruction", children: [
+                  { leaf: "à — prép." },
+                  { tag: "GN", cls: "gn", fn: "Régime", text: "différents moments de son instruction", children: [
+                    { leaf: "différents moments — adj. + nom (noyau)" },
+                    { tag: "GP", cls: "gp", fn: "Compl. du nom", text: "de son instruction", children: [
+                      { leaf: "de — prép." }, { leaf: "son instruction — dét. poss. + nom" }
+                    ]}
+                  ]}
+                ]}
+              ]
+            }
+          ]
+        },
+        {
+          tag: "GV", cls: "gv", fn: "Prédicat",
+          text: "auraient dû, eux en revanche, être de nature à créer un doute suffisant et … même sérieux afin de …",
+          children: [
+            { leaf: "auraient dû — v. devoir, cond. passé 3pl (semi-aux. modal)" },
+            {
+              tag: "GN", cls: "gn", fn: "Apposition de reprise (sujet détaché)",
+              text: "eux en revanche",
+              children: [
+                { leaf: "eux — pron. pers. tonique 3pl (reprend « les sollicitations »)" },
+                { leaf: "en revanche — loc. adv. (valeur adversative)" }
+              ]
+            },
+            {
+              tag: "GInf", cls: "ginf", fn: "COD de « devoir »",
+              text: "être de nature à créer un doute suffisant et … même sérieux afin de …",
+              children: [
+                { leaf: "être — v. inf. (copule)" },
+                {
+                  tag: "GP", cls: "gp", fn: "Attribut du sujet (locution)",
+                  text: "de nature à créer un doute suffisant et … même sérieux",
+                  children: [
+                    { leaf: "de nature à — loc. adj. (+ inf.)" },
+                    {
+                      tag: "GInf", cls: "ginf", fn: "Compl. de la loc. adj.",
+                      text: "créer un doute suffisant et … même sérieux",
+                      children: [
+                        { leaf: "créer — v. inf. (noyau)" },
+                        {
+                          tag: "GN", cls: "gn", fn: "COD",
+                          text: "un doute suffisant et, en tout état de cause …, même sérieux",
+                          children: [
+                            { leaf: "un — dét. indéfini" },
+                            { leaf: "doute — nom (noyau)" },
+                            {
+                              tag: "Coord", cls: "coord", fn: "Coord. d'adj. épithètes avec incise",
+                              text: "suffisant et … même sérieux",
+                              children: [
+                                { leaf: "suffisant — adj. qual. épithète (1ᵉʳ terme)" },
+                                { leaf: "et — conj. de coord." },
+                                {
+                                  tag: "GP", cls: "gp", fn: "Incise / CC (parenthétique)",
+                                  text: "en tout état de cause dans la situation présente",
+                                  children: [
+                                    { leaf: "en tout état de cause — loc. adv. (concessive)" },
+                                    { tag: "GP", cls: "gp", fn: "CC de situation", text: "dans la situation présente", children: [
+                                      { leaf: "dans — prép." }, { leaf: "la situation présente — dét. + nom + adj." }
+                                    ]}
+                                  ]
+                                },
+                                { leaf: "même — adv. renchérissant" },
+                                { leaf: "sérieux — adj. qual. épithète (2ᵉ terme)" }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  tag: "GP", cls: "gp", fn: "CC de but",
+                  text: "afin de se saisir a minima d'évaluer que …",
+                  children: [
+                    { leaf: "afin de — loc. prép. (but)" },
+                    {
+                      tag: "GInf", cls: "ginf", fn: "Régime (1ᵉʳ niveau inf.)",
+                      text: "se saisir a minima d'évaluer que …",
+                      children: [
+                        { leaf: "se saisir — v. pron. inf. (noyau)" },
+                        { leaf: "a minima — loc. adv. (latin juridique)" },
+                        {
+                          tag: "GInf", cls: "ginf", fn: "COI de « se saisir de » (2ᵉ niveau inf.)",
+                          text: "d'évaluer que le doute … n'impliquait aucune véracité …",
+                          children: [
+                            { leaf: "d' — prép." },
+                            { leaf: "évaluer — v. inf. (noyau)" },
+                            {
+                              tag: "Prop. sub. conj.", cls: "prop-sub", fn: "COD de « évaluer »",
+                              text: "que le doute émis par le requérant n'impliquait aucune véracité quant à une procédure viciée",
+                              children: [
+                                { leaf: "que — conj. de subordination" },
+                                {
+                                  tag: "GN", cls: "gn", fn: "Sujet",
+                                  text: "le doute émis par le requérant",
+                                  children: [
+                                    { leaf: "le doute — dét. + nom (noyau)" },
+                                    {
+                                      tag: "GPart", cls: "gpart", fn: "Épithète participiale",
+                                      text: "émis par le requérant",
+                                      children: [
+                                        { leaf: "émis — part. passé de « émettre »" },
+                                        { tag: "GP", cls: "gp", fn: "Compl. d'agent", text: "par le requérant", children: [
+                                          { leaf: "par — prép." }, { leaf: "le requérant — dét. + nom" }
+                                        ]}
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  tag: "GV", cls: "gv", fn: "Prédicat",
+                                  text: "n'impliquait aucune véracité quant à une procédure viciée",
+                                  children: [
+                                    { leaf: "n'… — adv. de nég. (sans « pas » : déterminant négatif suffit)" },
+                                    { leaf: "impliquait — v. impliquer, imp. 3sg" },
+                                    {
+                                      tag: "GN", cls: "gn", fn: "COD",
+                                      text: "aucune véracité",
+                                      children: [
+                                        { leaf: "aucune — dét. indéfini négatif" },
+                                        { leaf: "véracité — nom (noyau)" }
+                                      ]
+                                    },
+                                    {
+                                      tag: "GP", cls: "gp", fn: "Compl. de « véracité »",
+                                      text: "quant à une procédure viciée",
+                                      children: [
+                                        { leaf: "quant à — loc. prép." },
+                                        { tag: "GN", cls: "gn", fn: "Régime", text: "une procédure viciée", children: [
+                                          { leaf: "une — dét. indéfini" },
+                                          { leaf: "procédure — nom (noyau)" },
+                                          { leaf: "viciée — adj. (part. passé adjectivé) épithète" }
+                                        ]}
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+};
+
+
+// ══════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════
+let nodeCounter = 0;
+
+function renderNode(data, depth = 0) {
+  if (data.leaf) {
+    return `<div class="leaf">↳ ${data.leaf}</div>`;
+  }
+
+  const id = 'n' + (nodeCounter++);
+  const open = depth < 2 ? '' : 'collapsed';
+  const arrowCls = depth < 2 ? 'arrow open' : 'arrow';
+
+  let childrenHTML = '';
+  if (data.children) {
+    childrenHTML = data.children.map(c => renderNode(c, depth + 1)).join('');
+  }
+
+  return `
+    <div class="node c-${data.cls}" data-depth="${depth}">
+      <div class="node-header" onclick="toggle('${id}')">
+        <span class="${arrowCls}" id="arrow-${id}">▸</span>
+        <span class="tag tag-${data.cls}">${data.tag}</span>
+        ${data.fn ? `<span class="node-function">${data.fn}</span>` : ''}
+        <span class="node-text">${data.text || ''}</span>
+      </div>
+      <div class="node-children ${open}" id="${id}">
+        ${childrenHTML}
+      </div>
+    </div>
+  `;
+}
+
+function toggle(id) {
+  const el = document.getElementById(id);
+  const arrow = document.getElementById('arrow-' + id);
+  el.classList.toggle('collapsed');
+  arrow.classList.toggle('open');
+}
+
+function expandAllIn(treeId) {
+  document.getElementById(treeId).querySelectorAll('.node-children').forEach(el => el.classList.remove('collapsed'));
+  document.getElementById(treeId).querySelectorAll('.arrow').forEach(el => el.classList.add('open'));
+}
+
+function collapseAllIn(treeId) {
+  document.getElementById(treeId).querySelectorAll('.node-children').forEach(el => el.classList.add('collapsed'));
+  document.getElementById(treeId).querySelectorAll('.arrow').forEach(el => el.classList.remove('open'));
+}
+
+function expandLevelIn(treeId, maxDepth) {
+  document.getElementById(treeId).querySelectorAll('.node').forEach(node => {
+    const depth = parseInt(node.dataset.depth);
+    const children = node.querySelector('.node-children');
+    const arrow = node.querySelector('.arrow');
+    if (!children) return;
+    if (depth < maxDepth) {
+      children.classList.remove('collapsed');
+      if (arrow) arrow.classList.add('open');
+    } else {
+      children.classList.add('collapsed');
+      if (arrow) arrow.classList.remove('open');
+    }
+  });
+}
+
+document.getElementById('tree1').innerHTML = renderNode(tree1);
+document.getElementById('tree2').innerHTML = renderNode(tree2);
+</script>
+</body>
+</html>
